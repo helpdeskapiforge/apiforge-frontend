@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Command, Github, Terminal, Zap, Layers, Loader2, Eye, EyeOff } from "lucide-react";
+import { Command, Github, Terminal, Zap, Layers, Loader2, Eye, EyeOff, Coffee } from "lucide-react";
 
 // --- MICRO-COMPONENT: Typewriter ---
 const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => {
@@ -46,12 +46,17 @@ const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => 
 export default function SignupPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({ fullName: "", email: "", password: "" });
-  const [showPassword, setShowPassword] = useState(false); // 👁️ Toggle State
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // 🆕 Server Cold Start State
+  const [serverWakingUp, setServerWakingUp] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setServerWakingUp(false); // Reset error state
+
     try {
       const res = await fetch("http://localhost:8080/api/auth/signup", {
         method: "POST",
@@ -60,13 +65,21 @@ export default function SignupPage() {
       });
 
       if (res.ok) {
+        // Success: Redirect to login
         router.push("/login");
       } else {
-        const err = await res.text();
-        alert("Signup failed: " + err);
+        // Handle specific API errors vs Server Errors
+        if (res.status >= 500) {
+             setServerWakingUp(true);
+        } else {
+             const err = await res.text();
+             alert("Signup failed: " + err);
+        }
       }
     } catch (error) {
-      console.error("Signup error", error);
+      console.error("Signup network error", error);
+      // 🆕 Network Error caught here
+      setServerWakingUp(true);
     } finally {
       setLoading(false);
     }
@@ -93,6 +106,22 @@ export default function SignupPage() {
           </div>
 
           <form onSubmit={handleSignup} className="grid gap-4">
+            
+            {/* 🆕 SERVER WAKE UP MESSAGE */}
+            {serverWakingUp && (
+                <div className="p-4 rounded-lg bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-900 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+                    <div className="p-2 bg-orange-100 dark:bg-orange-800 rounded-full shrink-0">
+                        <Coffee className="h-4 w-4 text-orange-600 dark:text-orange-200" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-200">Server is Waking Up</h4>
+                        <p className="text-xs text-orange-700 dark:text-orange-300 mt-1 leading-relaxed">
+                            Our free-tier backend is spinning up from a cold start. This may take <strong>30-50 seconds</strong>. Please wait a moment and try again.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="fullName">Full Name</Label>
               <Input
@@ -119,11 +148,10 @@ export default function SignupPage() {
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
               
-              {/* PASSWORD INPUT WITH TOGGLE */}
               <div className="relative">
                 <Input
                     id="password"
-                    type={showPassword ? "text" : "password"} // Dynamic
+                    type={showPassword ? "text" : "password"} 
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                     required
@@ -145,7 +173,12 @@ export default function SignupPage() {
               </p>
             </div>
             <Button type="submit" className="w-full h-11" disabled={loading}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Account"}
+              {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {serverWakingUp ? "Retrying..." : "Create Account"}
+                  </>
+              ) : "Create Account"}
             </Button>
           </form>
 

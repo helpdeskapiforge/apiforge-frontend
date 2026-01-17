@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Command, Github, CheckCircle2, Loader2, Eye, EyeOff } from "lucide-react";
-// 👇 IMPORT THIS
+import { Command, Github, CheckCircle2, Loader2, Eye, EyeOff, ServerCrash, Coffee } from "lucide-react";
 import { setCookie } from "cookies-next"; 
+import { toast } from "sonner"; // Assuming you have sonner installed, otherwise use alert
 
 // --- MICRO-COMPONENT: Typewriter ---
 const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => {
@@ -51,11 +51,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false); 
   const [loading, setLoading] = useState(false);
+  
+  // 🆕 State to track if the server is likely sleeping
+  const [serverWakingUp, setServerWakingUp] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setServerWakingUp(false); // Reset error state on new attempt
+
     try {
+      // NOTE: Ensure this points to your PROD url in production, not localhost
       const res = await fetch("http://localhost:8080/api/auth/signin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,20 +71,24 @@ export default function LoginPage() {
       if (res.ok) {
         const data = await res.json();
         
-        // 1. Set Cookie for Middleware (CRITICAL FIX)
-        setCookie("token", data.token, { maxAge: 60 * 60 * 24 }); // Expires in 1 day
-        
-        // 2. Set LocalStorage for Client usage
+        setCookie("token", data.token, { maxAge: 60 * 60 * 24 });
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data));
         
-        // 3. Redirect
         router.push("/dashboard");
       } else {
-        alert("Login failed! Check your credentials.");
+        // Handle explicit errors (401, 400)
+        if (res.status === 401 || res.status === 400) {
+            alert("Invalid credentials. Please try again.");
+        } else {
+            // 500 errors might also mean server issues
+            setServerWakingUp(true);
+        }
       }
     } catch (error) {
-      console.error("Login error", error);
+      console.error("Login connection error", error);
+      // 🆕 Network Error caught here (fetch failed completely)
+      setServerWakingUp(true);
     } finally {
       setLoading(false);
     }
@@ -104,6 +114,22 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleLogin} className="grid gap-4">
+            
+            {/* 🆕 SERVER WAKE UP MESSAGE */}
+            {serverWakingUp && (
+                <div className="p-4 rounded-lg bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-900 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+                    <div className="p-2 bg-orange-100 dark:bg-orange-800 rounded-full shrink-0">
+                        <Coffee className="h-4 w-4 text-orange-600 dark:text-orange-200" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-200">Server is Waking Up</h4>
+                        <p className="text-xs text-orange-700 dark:text-orange-300 mt-1 leading-relaxed">
+                            Our backend runs on eco-mode to save resources. It may take <strong>30-50 seconds</strong> to spin up from a cold start. Please wait a moment and click "Sign In" again.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -153,7 +179,12 @@ export default function LoginPage() {
 
             </div>
             <Button type="submit" className="w-full h-11" disabled={loading}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
+              {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                    {serverWakingUp ? "Retrying..." : "Sign In"}
+                  </>
+              ) : "Sign In"}
             </Button>
           </form>
 
