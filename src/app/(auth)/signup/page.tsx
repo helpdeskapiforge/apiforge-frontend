@@ -1,15 +1,52 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Command, Github, Terminal, Zap, Layers, Loader2, Eye, EyeOff } from "lucide-react";
+
+// --- MICRO-COMPONENT: Typewriter ---
+const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isStarted, setIsStarted] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
+
+  useEffect(() => {
+    const startTimeout = setTimeout(() => {
+      setIsStarted(true);
+      let currentIndex = 0;
+      const intervalId = setInterval(() => {
+        if (currentIndex < text.length) {
+          setDisplayedText((prev) => prev + text.charAt(currentIndex));
+          currentIndex++;
+        } else {
+          clearInterval(intervalId);
+          setIsFinished(true);
+        }
+      }, 35);
+
+      return () => clearInterval(intervalId);
+    }, delay);
+
+    return () => clearTimeout(startTimeout);
+  }, [text, delay]);
+
+  return (
+    <span className="inline-flex items-center">
+      {displayedText}
+      {!isFinished && (
+        <span className={`ml-[2px] h-[1em] w-[3px] bg-white/50 ${isStarted ? "animate-none" : "animate-pulse"}`}></span>
+      )}
+    </span>
+  );
+};
 
 export default function SignupPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({ fullName: "", email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false); // 👁️ Toggle State
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -23,7 +60,6 @@ export default function SignupPage() {
       });
 
       if (res.ok) {
-        alert("Account created! Please login.");
         router.push("/login");
       } else {
         const err = await res.text();
@@ -37,57 +73,151 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-50">
-      <Card className="w-[400px] shadow-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
-          <CardDescription>Start mocking APIs in seconds</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div className="space-y-2">
+    <div className="w-full h-screen lg:grid lg:grid-cols-2">
+      
+      {/* LEFT SIDE - SIGNUP FORM */}
+      <div className="flex items-center justify-center py-12 bg-background">
+        <div className="mx-auto grid w-[350px] gap-6">
+          
+          <div className="grid gap-2 text-left">
+            <div className="flex items-center gap-2 font-bold mb-2">
+               <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                  <Command className="h-4 w-4" />
+               </div>
+               APIForge
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">Create an account</h1>
+            <p className="text-sm text-muted-foreground">
+              Enter your details below to create your developer workspace.
+            </p>
+          </div>
+
+          <form onSubmit={handleSignup} className="grid gap-4">
+            <div className="grid gap-2">
               <Label htmlFor="fullName">Full Name</Label>
-              <Input 
-                id="fullName" 
-                placeholder="John Doe" 
-                value={formData.fullName} 
-                onChange={(e) => setFormData({...formData, fullName: e.target.value})} 
-                required 
+              <Input
+                id="fullName"
+                placeholder="John Doe"
+                value={formData.fullName}
+                onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                required
+                className="h-11 bg-muted/5 focus-visible:ring-1"
               />
             </div>
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="name@company.com" 
-                value={formData.email} 
-                onChange={(e) => setFormData({...formData, email: e.target.value})} 
-                required 
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                required
+                className="h-11 bg-muted/5 focus-visible:ring-1"
               />
             </div>
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                value={formData.password} 
-                onChange={(e) => setFormData({...formData, password: e.target.value})} 
-                required 
-              />
+              
+              {/* PASSWORD INPUT WITH TOGGLE */}
+              <div className="relative">
+                <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"} // Dynamic
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    required
+                    className="h-11 bg-muted/5 focus-visible:ring-1 pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-11 w-11 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground">
+                Must be at least 8 characters long.
+              </p>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating Account..." : "Sign Up"}
+            <Button type="submit" className="w-full h-11" disabled={loading}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Account"}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
+          <Button variant="outline" className="w-full h-11" type="button" disabled>
+            <Github className="mr-2 h-4 w-4" /> GitHub
+          </Button>
+
+          <div className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary font-semibold hover:underline">
-              Login
+            <Link href="/login" className="underline underline-offset-4 hover:text-primary font-medium">
+              Log in
             </Link>
           </div>
-        </CardContent>
-      </Card>
+
+          <p className="px-8 text-center text-xs text-muted-foreground">
+            By clicking continue, you agree to our{" "}
+            <Link href="#" className="underline underline-offset-4 hover:text-primary">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="#" className="underline underline-offset-4 hover:text-primary">
+              Privacy Policy
+            </Link>.
+          </p>
+        </div>
+      </div>
+
+      {/* RIGHT SIDE - VISUAL */}
+      <div className="hidden bg-zinc-950 lg:flex flex-col justify-center p-12 relative overflow-hidden text-white border-l border-zinc-800">
+         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black opacity-80"></div>
+         <div className="absolute top-0 left-0 w-full h-full opacity-5 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+
+         <div className="relative z-10 max-w-lg mx-auto">
+            <h2 className="text-3xl font-bold tracking-tight mb-4 min-h-[80px] lg:min-h-[auto] leading-tight">
+              <Typewriter text=" Accelerate your development workflow." delay={400} />
+            </h2>
+            
+            <p className="text-zinc-400 mb-10 leading-relaxed">
+              Join thousands of developers using APIForge to decouple frontend and backend development.
+            </p>
+
+            <div className="grid gap-6">
+                {[
+                    { icon: Zap, title: "Zero-config Mocks", desc: "Generate realistic APIs from JSON in seconds." },
+                    { icon: Terminal, title: "Developer Native", desc: "CLI support, Environment variables, and CORS control." },
+                    { icon: Layers, title: "Scenario Testing", desc: "Simulate complex states like 404s, 500s, and timeouts." }
+                ].map((item, i) => (
+                    <div 
+                        key={i} 
+                        className="flex items-start gap-4 animate-in fade-in slide-in-from-bottom-3 duration-700" 
+                        style={{ animationDelay: `${800 + (i * 150)}ms`, animationFillMode: 'backwards' }}
+                    >
+                        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-800 border border-zinc-700">
+                            <item.icon className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-zinc-200 text-sm">{item.title}</h3>
+                            <p className="text-zinc-500 text-xs mt-1">{item.desc}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+         </div>
+      </div>
     </div>
   );
 }

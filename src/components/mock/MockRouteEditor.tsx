@@ -8,8 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Save, Wand2, Clock, Zap, AlertTriangle } from "lucide-react";
+import { 
+  Save, Wand2, Clock, Zap, AlertTriangle, Check, Loader2, RefreshCw, Copy, Globe 
+} from "lucide-react";
+import { 
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger 
+} from "@/components/ui/tooltip";
 import KeyValueTable from "@/components/request/KeyValueTable";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   routeId: number;
@@ -18,55 +24,80 @@ interface Props {
 
 export default function MockRouteEditor({ routeId, onUpdate }: Props) {
   const [route, setRoute] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("body");
+  const [loading, setLoading] = useState(true);
+
+  // Feedback States
+  const [saving, setSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false); // ✅ New state for Save feedback
+  const [formatted, setFormatted] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   // Settings States
   const [headers, setHeaders] = useState<Record<string, string>>({});
   const [body, setBody] = useState("");
   const [delay, setDelay] = useState(0);
-  
-  // New Chaos States
   const [chaosEnabled, setChaosEnabled] = useState(false);
   const [failureRate, setFailureRate] = useState(0.0);
 
   useEffect(() => {
-    loadRoute();
+    if (routeId) loadRoute();
   }, [routeId]);
 
   const loadRoute = async () => {
+    setLoading(true);
     try {
         const res = await api.get(`/mocks/routes/${routeId}`);
-        setRoute(res.data);
-        setBody(res.data.responseBody || "");
-        setDelay(res.data.delayMs || 0);
-        setHeaders(res.data.responseHeaders ? JSON.parse(res.data.responseHeaders) : { "Content-Type": "application/json" });
+        let routeData = { ...res.data };
+
+        if (!routeData.mockServer && routeData.mockServerId) {
+            try {
+                const serverRes = await api.get(`/mocks/servers/${routeData.mockServerId}`);
+                routeData.mockServer = serverRes.data;
+            } catch (err) {
+                console.warn("Could not load parent server details", err);
+            }
+        }
+
+        setRoute(routeData);
+        setBody(routeData.responseBody || "");
+        setDelay(routeData.delayMs || 0);
         
-        // Load Chaos Settings
-        setChaosEnabled(res.data.chaosEnabled || false);
-        setFailureRate(res.data.failureRate || 0.0);
-    } catch(e) { console.error(e); }
+        try {
+            setHeaders(routeData.responseHeaders ? JSON.parse(routeData.responseHeaders) : { "Content-Type": "application/json" });
+        } catch(e) {
+            setHeaders({ "Content-Type": "application/json" });
+        }
+
+        setChaosEnabled(routeData.chaosEnabled || false);
+        setFailureRate(routeData.failureRate || 0.0);
+    } catch(e) { 
+        console.error("Failed to load route:", e); 
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await api.put(`/mocks/routes/${routeId}`, {
-        ...route, // Keeps existing fields including method, path, statusCode, mockServer
+        ...route,
         responseBody: body,
         responseHeaders: JSON.stringify(headers),
         delayMs: delay,
         chaosEnabled,
         failureRate,
-        // Ensure mockServerId is passed if your DTO requires it explicitly, 
-        // though `...route` usually covers it if the GET response included it.
-        // If GET response has `mockServer: {id: 1}`, we might need to flat map it:
         mockServerId: route.mockServer?.id || route.mockServerId
       });
-      onUpdate(); 
+      onUpdate();
+      
+      // ✅ Success Feedback
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+
     } catch (e) { 
-        console.error(e); 
-        alert("Failed to save route");
+        alert("Failed to save route"); 
     } finally { 
         setSaving(false); 
     }
@@ -76,73 +107,190 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
     try {
         const parsed = JSON.parse(body);
         setBody(JSON.stringify(parsed, null, 2));
+        setFormatted(true);
+        setTimeout(() => setFormatted(false), 2000);
     } catch (e) { alert("Invalid JSON"); }
   };
 
-  if (!route) return <div className="p-8 text-center text-muted-foreground">Loading settings...</div>;
+  const fullUrl = (route && route.mockServer) 
+    ? `http://localhost:8080/api/mock/simulator/${route.mockServer.pathPrefix}${route.path}`
+    : "Loading endpoint...";
+
+  const handleCopyUrl = () => {
+    if (fullUrl.startsWith("http")) {
+        navigator.clipboard.writeText(fullUrl);
+        
+        // ✅ Copy Feedback
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const getMethodColor = (m: string) => {
+    switch(m) {
+        case "GET": return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
+        case "POST": return "text-blue-500 bg-blue-500/10 border-blue-500/20";
+        case "PUT": return "text-orange-500 bg-orange-500/10 border-orange-500/20";
+        case "DELETE": return "text-red-500 bg-red-500/10 border-red-500/20";
+        default: return "text-foreground bg-muted";
+    }
+  };
+
+  if (loading) return <div className="h-full flex items-center justify-center text-muted-foreground/50"><Loader2 className="h-6 w-6 animate-spin"/></div>;
+  
+  if (!route) return <div className="h-full flex items-center justify-center text-muted-foreground">Route not found</div>;
 
   return (
-    <div className="h-full flex flex-col">
-      {/* 1. TOP SETTINGS BAR */}
-      <div className="h-16 border-b flex items-center px-6 gap-4 bg-muted/5">
+    <div className="h-full flex flex-col bg-background text-sm">
+      
+      {/* 1. Header Toolbar */}
+      <div className="h-14 border-b flex items-center px-6 gap-4 bg-background shrink-0">
+         
+         {/* Method Selector */}
          <Select value={route.method} onValueChange={(v) => setRoute({...route, method: v})}>
-            <SelectTrigger className="w-[100px] font-bold"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={`w-[100px] h-8 font-mono font-bold border-transparent hover:bg-muted/50 transition-colors ${getMethodColor(route.method)}`}>
+                <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-                <SelectItem value="GET" className="text-emerald-600 font-bold">GET</SelectItem>
-                <SelectItem value="POST" className="text-blue-600 font-bold">POST</SelectItem>
-                <SelectItem value="PUT" className="text-orange-600 font-bold">PUT</SelectItem>
-                <SelectItem value="DELETE" className="text-red-600 font-bold">DELETE</SelectItem>
-                <SelectItem value="PATCH" className="text-yellow-600 font-bold">PATCH</SelectItem>
+                {["GET", "POST", "PUT", "DELETE", "PATCH"].map(m => (
+                    <SelectItem key={m} value={m} className="font-mono text-xs font-semibold">{m}</SelectItem>
+                ))}
             </SelectContent>
          </Select>
 
+         {/* Path Input */}
          <Input 
-            className="flex-1 font-mono text-sm" 
+            className="flex-1 font-mono text-sm h-8 border-transparent hover:border-border focus-visible:border-primary bg-transparent px-2 transition-all" 
             value={route.path} 
             onChange={(e) => setRoute({...route, path: e.target.value})} 
             placeholder="/path"
          />
 
-         <div className="flex items-center gap-2 bg-background border rounded-md px-2 h-10">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase">Status</span>
+         {/* Status Code */}
+         <div className="flex items-center gap-2 bg-muted/20 border border-transparent hover:border-border rounded-md px-2 h-8 transition-colors">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</span>
             <Input 
-                className="w-[60px] border-0 h-8 font-mono text-sm text-center font-bold focus-visible:ring-0 p-0" 
+                className="w-[50px] border-0 h-6 font-mono text-sm text-center font-bold focus-visible:ring-0 p-0 bg-transparent" 
                 value={route.statusCode} 
                 onChange={(e) => setRoute({...route, statusCode: parseInt(e.target.value) || 200})} 
             />
          </div>
 
-         <Button onClick={handleSave} disabled={saving} className="gap-2 min-w-[100px]">
-            {saving ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <Save className="h-4 w-4" />}
-            Save
+         <div className="w-[1px] h-5 bg-border/40 mx-1" />
+
+         {/* SAVE BUTTON WITH FEEDBACK */}
+         <Button 
+            onClick={handleSave} 
+            disabled={saving} 
+            size="sm" 
+            variant={isSaved ? "outline" : "default"}
+            className={`h-8 gap-2 min-w-[100px] font-medium transition-all duration-300 ${isSaved ? "bg-green-50 text-green-600 border-green-200 hover:text-green-700 hover:bg-green-50" : "shadow-sm active:scale-[0.98]"}`}
+         >
+            {saving ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin"/>
+            ) : isSaved ? (
+                <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-300">
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Saved</span>
+                </div>
+            ) : (
+                <>
+                    <Save className="h-3.5 w-3.5" />
+                    Save
+                </>
+            )}
          </Button>
       </div>
 
-      {/* 2. MAIN TABS */}
+      {/* 2. Endpoint Info Bar */}
+      <div className="px-6 py-2 bg-muted/10 border-b flex items-center justify-between shrink-0">
+         <div className="flex items-center gap-3 overflow-hidden">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Globe className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Endpoint</span>
+            </div>
+            <code className="text-xs font-mono text-foreground/80 truncate select-all" title={fullUrl}>
+                {fullUrl}
+            </code>
+         </div>
+         <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    {/* COPY BUTTON WITH FEEDBACK */}
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={handleCopyUrl} 
+                        className={`h-6 w-6 transition-colors duration-200 ${copied ? "text-green-600 bg-green-50" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left"><p>Copy URL</p></TooltipContent>
+            </Tooltip>
+         </TooltipProvider>
+      </div>
+
+      {/* 3. Main Tabs */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b px-6 bg-background/50 backdrop-blur sticky top-0 z-10">
+        <div className="border-b px-6 bg-background sticky top-0 z-10">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="h-12 bg-transparent p-0 gap-6">
-                    <TabsTrigger value="body" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0">Response Body</TabsTrigger>
-                    <TabsTrigger value="headers" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0">Headers <span className="ml-2 text-xs bg-muted px-1.5 rounded-full">{Object.keys(headers).length}</span></TabsTrigger>
-                    <TabsTrigger value="behavior" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-0">Delay & Chaos</TabsTrigger>
+                <TabsList className="h-12 bg-transparent p-0 gap-6 w-full justify-start">
+                    {["body", "headers", "behavior"].map(tab => (
+                        <TabsTrigger 
+                            key={tab} 
+                            value={tab} 
+                            className="
+                                h-full rounded-none border-b-2 border-transparent px-1 
+                                data-[state=active]:border-primary data-[state=active]:text-foreground 
+                                text-muted-foreground hover:text-foreground transition-all duration-200 capitalize
+                            "
+                        >
+                            {tab === "behavior" ? "Delay & Chaos" : tab === "body" ? "Response Body" : tab}
+                            {tab === "headers" && Object.keys(headers).length > 0 && 
+                                <span className="ml-2 w-1.5 h-1.5 rounded-full bg-primary/60" />
+                            }
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
             </Tabs>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-background">
+        <div className="flex-1 overflow-y-auto bg-background/50">
             <Tabs value={activeTab} className="h-full">
                 
                 {/* BODY TAB */}
-                <TabsContent value="body" className="h-full m-0 p-6 flex flex-col">
-                    <div className="flex justify-between items-center mb-2">
-                        <Label className="text-xs text-muted-foreground uppercase">JSON Response Content</Label>
-                        <Button variant="ghost" size="sm" onClick={formatJSON} className="h-6 text-xs gap-1">
-                            <Wand2 className="h-3 w-3" /> Prettify
-                        </Button>
+                <TabsContent value="body" className="h-full m-0 p-0 flex flex-col">
+                    <div className="flex justify-between items-center px-6 py-3 border-b bg-muted/5">
+                        <Label className="text-xs text-muted-foreground font-medium">Response Body (JSON)</Label>
+                        
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={formatJSON} 
+                                        className="h-7 text-xs gap-1.5 hover:bg-muted text-muted-foreground hover:text-foreground"
+                                    >
+                                        {formatted ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Wand2 className="h-3.5 w-3.5" />}
+                                        {formatted ? "Formatted" : "Prettify"}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Auto-format JSON</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
+                    
                     <textarea 
-                        className="flex-1 w-full bg-muted/20 border rounded-md p-4 font-mono text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 leading-relaxed"
+                        className="
+                            flex-1 w-full p-6 
+                            bg-background dark:bg-[#09090b] 
+                            font-mono text-[13px] leading-relaxed 
+                            resize-none focus:outline-none 
+                            selection:bg-primary/20
+                            text-foreground/90
+                        "
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
                         placeholder="{ 'message': 'Hello World' }"
@@ -150,44 +298,50 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
                     />
                 </TabsContent>
 
-                {/* HEADERS TAB */}
-                <TabsContent value="headers" className="h-full m-0 p-6">
-                    <div className="max-w-3xl">
-                        <h3 className="text-sm font-medium mb-4">Response Headers</h3>
+                {/* HEADERS TAB - CENTERED */}
+                <TabsContent value="headers" className="h-full m-0 p-8">
+                    <div className="max-w-5xl mx-auto w-full">
+                        <h3 className="text-sm font-medium mb-4 text-foreground/80">Response Headers</h3>
                         <KeyValueTable initialData={headers} onChange={setHeaders} />
                     </div>
                 </TabsContent>
 
-                {/* BEHAVIOR TAB (Chaos + Delay) */}
-                <TabsContent value="behavior" className="h-full m-0 p-6">
-                    <div className="max-w-xl space-y-8">
+                {/* BEHAVIOR TAB - CENTERED */}
+                <TabsContent value="behavior" className="h-full m-0 p-8">
+                    <div className="max-w-3xl mx-auto w-full space-y-8">
                         
-                        {/* 1. Delay Section */}
-                        <div className="space-y-4 p-4 border rounded-lg bg-muted/5">
-                            <div className="flex items-center gap-2">
-                                <Clock className="h-5 w-5 text-blue-500" />
-                                <h3 className="font-medium">Network Latency</h3>
-                            </div>
-                            <p className="text-sm text-muted-foreground">Add a fixed delay to simulate slow APIs.</p>
-                            
-                            <div className="flex items-center gap-4 pt-2">
-                                <div className="flex-1">
-                                    <Label className="text-xs uppercase font-bold text-muted-foreground">Delay (ms)</Label>
-                                    <Input 
-                                        type="number" 
-                                        value={delay} 
-                                        onChange={(e) => setDelay(parseInt(e.target.value) || 0)} 
-                                        className="mt-1.5"
-                                    />
+                        {/* Delay */}
+                        <div className="space-y-4 p-5 border rounded-lg bg-background shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                        <Clock className="h-4 w-4 text-blue-500" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-medium">Network Latency</h3>
+                                        <p className="text-xs text-muted-foreground">Simulate slow API responses</p>
+                                    </div>
                                 </div>
-                                <div className="flex gap-2 pt-7">
-                                    {[0, 500, 1000, 3000].map(ms => (
+                                <Input 
+                                    type="number" 
+                                    className="w-20 text-right font-mono"
+                                    value={delay} 
+                                    onChange={(e) => setDelay(parseInt(e.target.value) || 0)} 
+                                />
+                            </div>
+                            
+                            <div className="pt-2">
+                                <div className="flex justify-between text-[10px] text-muted-foreground uppercase font-bold mb-2">
+                                    <span>Presets</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    {[0, 200, 500, 1000, 3000].map(ms => (
                                         <Button 
                                             key={ms} 
-                                            variant="outline" 
+                                            variant={delay === ms ? "default" : "outline"}
                                             size="sm"
                                             onClick={() => setDelay(ms)}
-                                            className={delay === ms ? "border-primary text-primary bg-primary/5" : ""}
+                                            className="h-7 text-xs flex-1"
                                         >
                                             {ms === 0 ? "None" : `${ms}ms`}
                                         </Button>
@@ -196,24 +350,26 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
                             </div>
                         </div>
 
-                        {/* 2. Chaos Monkey Section */}
-                        <div className={`space-y-4 p-4 border rounded-lg transition-colors ${chaosEnabled ? 'bg-red-500/5 border-red-200 dark:border-red-900' : 'bg-muted/5'}`}>
+                        {/* Chaos */}
+                        <div className={`space-y-4 p-5 border rounded-lg transition-colors ${chaosEnabled ? 'bg-red-500/5 border-red-200 dark:border-red-900/50' : 'bg-background shadow-sm'}`}>
                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Zap className={`h-5 w-5 ${chaosEnabled ? 'text-red-500' : 'text-muted-foreground'}`} />
+                                <div className="flex items-center gap-3">
+                                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${chaosEnabled ? 'bg-red-500/10' : 'bg-muted'}`}>
+                                        <Zap className={`h-4 w-4 ${chaosEnabled ? 'text-red-500' : 'text-muted-foreground'}`} />
+                                    </div>
                                     <div>
                                         <h3 className="font-medium">Chaos Monkey</h3>
-                                        <p className="text-xs text-muted-foreground">Randomly fail requests with 500 Errors</p>
+                                        <p className="text-xs text-muted-foreground">Randomly fail requests (500 Error)</p>
                                     </div>
                                 </div>
                                 <Switch checked={chaosEnabled} onCheckedChange={setChaosEnabled} />
                              </div>
 
                              {chaosEnabled && (
-                                <div className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Failure Rate</span>
-                                        <span className="font-bold text-red-600">{(failureRate * 100).toFixed(0)}%</span>
+                                <div className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-1 duration-300">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="text-xs">Failure Rate</Label>
+                                        <Badge variant="outline" className="font-mono text-red-500 border-red-200 bg-red-50">{Math.round(failureRate * 100)}%</Badge>
                                     </div>
                                     <Slider 
                                         value={[failureRate * 100]} 
@@ -221,7 +377,7 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
                                         onValueChange={(vals) => setFailureRate(vals[0] / 100)}
                                         className="py-2"
                                     />
-                                    <div className="flex items-center gap-2 text-xs text-red-600 bg-red-100 dark:bg-red-900/20 p-2 rounded">
+                                    <div className="flex items-center gap-2 text-xs text-red-600/80 bg-red-100/50 p-2 rounded border border-red-100 dark:border-red-900/20">
                                         <AlertTriangle className="h-3 w-3" />
                                         <span>Warning: This will cause random 500 Internal Server Errors.</span>
                                     </div>
