@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"; // <--- Import this
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ContextDesk API Platform",
+  title: "APIForge API Platform",
   description: "Professional API Client",
 };
 

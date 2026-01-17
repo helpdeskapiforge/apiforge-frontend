@@ -4,31 +4,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Play, Clock, Wifi, AlertCircle, Copy, Terminal } from "lucide-react";
+import { Save, Play, Clock, Wifi, Copy, Terminal, Loader2, Check } from "lucide-react"; // Added Check
 import api from "@/lib/api";
 import KeyValueTable from "@/components/request/KeyValueTable";
 import AuthEditor, { AuthConfig } from "@/components/request/AuthEditor";
 import { Badge } from "@/components/ui/badge";
-
-interface RequestItem {
-  id: number;
-  name: string;
-  method: string;
-  url: string;
-  headers?: string;
-  body?: string;
-  authConfig?: string;
-}
 
 interface RequestEditorProps {
   requestId: number;
 }
 
 export default function RequestEditor({ requestId }: RequestEditorProps) {
-      const [request, setRequest] = useState<RequestItem | null>(null);
+  const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("params");
+  
+  // Feedback States
+  const [saving, setSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false); // ✅ New State for "Saved" tick
+  const [isCopied, setIsCopied] = useState(false); // ✅ New State for "Copied" tick
   
   // Data States
   const [method, setMethod] = useState("GET");
@@ -42,38 +36,38 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
   const [response, setResponse] = useState<any>(null);
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
+  const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
-    const fetchRequest = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/requests/${requestId}`);
-        const data = res.data;
-        setRequest(data);
-        setMethod(data.method);
-        setUrl(data.url || "");
-        setBody(data.body || "");
-        setHeaders(data.headers ? JSON.parse(data.headers) : {});
-        setAuthConfig(data.authConfig ? JSON.parse(data.authConfig) : { type: "none" });
-        
-        if (data.url && data.url.includes("?")) {
-            const searchPart = data.url.split("?")[1];
-            const params = new URLSearchParams(searchPart);
-            const paramObj: Record<string, string> = {};
-            params.forEach((val, key) => { paramObj[key] = val; });
-            setQueryParams(paramObj);
-        }
-      } catch (error) {
-        console.error("Error loading request", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     if (requestId) fetchRequest();
   }, [requestId]);
 
-  
-  // Logic functions (Syncing, Sending, Saving) remain the same...
+  const fetchRequest = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/requests/${requestId}`);
+      const data = res.data;
+      setRequest(data);
+      setMethod(data.method);
+      setUrl(data.url || "");
+      setBody(data.body || "");
+      setHeaders(data.headers ? JSON.parse(data.headers) : {});
+      setAuthConfig(data.authConfig ? JSON.parse(data.authConfig) : { type: "none" });
+      
+      if (data.url && data.url.includes("?")) {
+          const searchPart = data.url.split("?")[1];
+          const params = new URLSearchParams(searchPart);
+          const paramObj: Record<string, string> = {};
+          params.forEach((val, key) => { paramObj[key] = val; });
+          setQueryParams(paramObj);
+      }
+    } catch (error) {
+      console.error("Failed to load", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl);
     try {
@@ -102,11 +96,14 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
 
   const resolveVariables = (text: string, vars: Record<string, string>) => {
     if (!text) return "";
-    return text.replace(/\{\{(.+?)\}\}/g, (_, key) => vars[key] || `{{${key}}}`);
+    return text.replace(/\{\{(.+?)\}\}/g, (match, key) => {
+        const trimmedKey = key.trim();
+        return vars[trimmedKey] !== undefined ? vars[trimmedKey] : match;
+    });
   };
 
   const handleSend = async () => {
-    setLoading(true);
+    setExecuting(true);
     setResponse(null);
     setResponseStatus(null);
     
@@ -114,6 +111,7 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
       const storedVars = localStorage.getItem("activeEnvVars");
       const activeVars = storedVars ? JSON.parse(storedVars) : {};
       const resolvedUrl = resolveVariables(url, activeVars);
+
       const finalHeaders: Record<string, string> = {};
       Object.keys(headers).forEach(key => {
         finalHeaders[key] = resolveVariables(headers[key], activeVars);
@@ -128,16 +126,25 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
           finalHeaders["Authorization"] = `Basic ${btoa(`${u}:${p}`)}`;
       }
 
+      const resolvedBody = resolveVariables(body, activeVars);
+
       const res = await api.post("/proxy/execute", {
-        url: resolvedUrl, method, headers: finalHeaders, body
+        url: resolvedUrl, 
+        method, 
+        headers: finalHeaders, 
+        body: resolvedBody
       });
+
       setResponse(res.data.body);
       setResponseStatus(res.data.status);
       setResponseTime(res.data.timeMs);
-    } catch (error) {
-      setResponse("Error: Could not reach server");
+    } catch (error: any) {
+      console.error("Execute Error", error);
+      const errMsg = error.response?.data || "Error: Could not reach server";
+      setResponse(errMsg);
+      setResponseStatus(error.response?.status || 500);
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
@@ -150,7 +157,25 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
         headers: JSON.stringify(headers),
         authConfig: JSON.stringify(authConfig)
       });
-    } catch (error) { console.error("Failed to save", error); } finally { setSaving(false); }
+      
+      // ✅ SUCCESS FEEDBACK
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000); // Reset after 2s
+
+    } catch (error) { 
+        console.error("Failed to save", error); 
+    } finally { 
+        setSaving(false); 
+    }
+  };
+
+  const handleCopyResponse = () => {
+      if(!response) return;
+      navigator.clipboard.writeText(JSON.stringify(response, null, 2));
+      
+      // ✅ COPY FEEDBACK
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
   };
 
   const getMethodColor = (m: string) => {
@@ -163,18 +188,14 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
     }
   };
 
+  if (loading) return <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></div>;
   if (!request) return <div className="p-8 text-center">Select a request</div>;
 
  return (
     <div className="h-full flex flex-col bg-background">
-      
-      {/* 🟢 TOP BAR: Cockpit Style */}
+      {/* 🟢 TOP BAR */}
       <div className="h-16 border-b flex items-center px-4 gap-4 bg-background/80 backdrop-blur z-20">
-        
-        {/* URL Input Group */}
         <div className="flex-1 flex items-center shadow-sm border rounded-lg bg-muted/20 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all duration-200 overflow-hidden">
-             
-             {/* Method Selector */}
              <div className="border-r border-border/60 bg-muted/30 px-1">
                  <Select value={method} onValueChange={setMethod}>
                   <SelectTrigger className={`w-[105px] border-0 bg-transparent focus:ring-0 h-11 ${getMethodColor(method)} tracking-wide`}>
@@ -189,7 +210,6 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
                 </Select>
              </div>
              
-             {/* URL Input */}
              <Input 
                 className="flex-1 border-0 bg-transparent focus-visible:ring-0 h-11 rounded-none font-mono text-sm px-4 placeholder:text-muted-foreground/50 text-foreground" 
                 placeholder="https://api.example.com/v1/resource" 
@@ -198,27 +218,41 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
             />
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-3">
+            {/* SEND BUTTON */}
             <Button 
                 onClick={handleSend} 
-                disabled={loading} 
+                disabled={executing} 
                 className="h-11 px-8 gap-2 font-semibold tracking-wide shadow-md shadow-primary/10 hover:shadow-primary/20 active:scale-[0.98] transition-all duration-100 ease-in-out"
             >
-                {loading ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                {executing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
                 SEND
             </Button>
             
-            <Button variant="ghost" size="icon" onClick={handleSave} disabled={saving} className="h-11 w-11 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                <Save className="h-5 w-5" />
+            {/* SAVE BUTTON WITH FEEDBACK */}
+            <Button 
+                variant={isSaved ? "outline" : "ghost"} 
+                size={isSaved ? "default" : "icon"} 
+                onClick={handleSave} 
+                disabled={saving} 
+                className={`h-11 transition-all duration-300 ${isSaved ? "bg-green-50 text-green-600 border-green-200 hover:text-green-700 w-24" : "w-11 text-muted-foreground hover:text-foreground"}`}
+            >
+                {saving ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : isSaved ? (
+                    <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-300">
+                        <Check className="h-4 w-4" />
+                        <span className="font-bold">Saved</span>
+                    </div>
+                ) : (
+                    <Save className="h-5 w-5" />
+                )}
             </Button>
         </div>
       </div>
 
       {/* 🟠 MAIN CONTENT */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        
-        {/* TABS - Refined Active State */}
         <div className="border-b px-2 bg-background/50 backdrop-blur sticky top-0 z-10">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="h-11 bg-transparent p-0 gap-6 w-full justify-start px-2">
@@ -229,7 +263,6 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
                             className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:font-semibold px-1 capitalize text-sm text-muted-foreground hover:text-foreground transition-all duration-200"
                         >
                             {tab}
-                            {/* Dot indicators */}
                             {(tab === "params" && Object.keys(queryParams).length > 0) || 
                              (tab === "headers" && Object.keys(headers).length > 0) ? 
                              <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary/70"></span> : null}
@@ -239,7 +272,6 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
             </Tabs>
         </div>
 
-        {/* EDITOR AREA */}
         <div className="flex-1 bg-background overflow-y-auto">
              <Tabs value={activeTab} className="h-full">
                  <TabsContent value="params" className="m-0 h-full p-6">
@@ -273,8 +305,6 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
       
       {/* 🔵 RESPONSE SECTION */}
       <div className="h-[40%] border-t bg-muted/5 flex flex-col relative z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-        
-        {/* Status Bar */}
         <div className="h-10 border-b flex items-center justify-between px-4 bg-background/95 backdrop-blur select-none">
             <div className="flex items-center gap-2">
                  <Terminal className="h-3.5 w-3.5 text-muted-foreground/70" />
@@ -304,16 +334,16 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
             )}
         </div>
         
-        {/* Response Content */}
         <div className="flex-1 overflow-auto bg-background relative">
             {response ? (
                 <div className="relative group h-full">
+                    {/* COPY BUTTON WITH FEEDBACK */}
                     <Button 
                         variant="secondary" size="icon" 
-                        className="absolute top-4 right-4 h-8 w-8 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm z-10" 
-                        onClick={() => navigator.clipboard.writeText(JSON.stringify(response, null, 2))}
+                        className={`absolute top-4 right-4 h-8 w-8 transition-all duration-200 shadow-sm z-10 ${isCopied ? "bg-green-100 text-green-600 opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                        onClick={handleCopyResponse} 
                     >
-                        <Copy className="h-3.5 w-3.5" />
+                        {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-3.5 w-3.5" />}
                     </Button>
                     <pre className="p-6 text-xs font-mono text-foreground/90 leading-relaxed whitespace-pre-wrap">
                         {typeof response === 'object' || (typeof response === 'string' && response.startsWith('{')) 

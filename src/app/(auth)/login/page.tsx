@@ -1,16 +1,55 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Command, Github, CheckCircle2, Loader2, Eye, EyeOff } from "lucide-react";
+// 👇 IMPORT THIS
+import { setCookie } from "cookies-next"; 
+
+// --- MICRO-COMPONENT: Typewriter ---
+const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isStarted, setIsStarted] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
+
+  useEffect(() => {
+    const startTimeout = setTimeout(() => {
+      setIsStarted(true);
+      let currentIndex = 0;
+      const intervalId = setInterval(() => {
+        if (currentIndex < text.length) {
+          setDisplayedText((prev) => prev + text.charAt(currentIndex));
+          currentIndex++;
+        } else {
+          clearInterval(intervalId);
+          setIsFinished(true);
+        }
+      }, 40);
+
+      return () => clearInterval(intervalId);
+    }, delay);
+
+    return () => clearTimeout(startTimeout);
+  }, [text, delay]);
+
+  return (
+    <span className="inline-flex items-center">
+      {displayedText}
+      {!isFinished && (
+        <span className={`ml-[2px] h-[1em] w-[3px] bg-white/50 ${isStarted ? "animate-none" : "animate-pulse"}`}></span>
+      )}
+    </span>
+  );
+};
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); 
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -25,9 +64,15 @@ export default function LoginPage() {
 
       if (res.ok) {
         const data = await res.json();
-        // Ideally use a cookie or safer storage, but localStorage is fine for Phase 1
+        
+        // 1. Set Cookie for Middleware (CRITICAL FIX)
+        setCookie("token", data.token, { maxAge: 60 * 60 * 24 }); // Expires in 1 day
+        
+        // 2. Set LocalStorage for Client usage
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data));
+        
+        // 3. Redirect
         router.push("/dashboard");
       } else {
         alert("Login failed! Check your credentials.");
@@ -40,47 +85,126 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-50">
-      <Card className="w-[400px] shadow-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>Login to your Mock API Workspace</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
+    <div className="w-full h-screen lg:grid lg:grid-cols-2">
+      {/* LEFT SIDE - AUTH FORM */}
+      <div className="flex items-center justify-center py-12 bg-background">
+        <div className="mx-auto grid w-[350px] gap-6">
+          
+          <div className="grid gap-2 text-left">
+            <div className="flex items-center gap-2 font-bold mb-2">
+               <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                  <Command className="h-4 w-4" />
+               </div>
+               APIForge
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
+            <p className="text-sm text-muted-foreground">
+              Enter your email to sign in to your workspace.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="grid gap-4">
+            <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="developer@example.com" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-11 bg-muted/5 focus-visible:ring-1"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-              />
+            <div className="grid gap-2">
+              <div className="flex items-center">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  href="#"
+                  className="ml-auto inline-block text-xs underline text-muted-foreground hover:text-primary"
+                   onClick={(e) => {
+                     e.preventDefault();
+                     window.open("mailto:helpdesk.apiforge@gmail.com?subject=Forgot Password&body=Help me reset my password");
+                   }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"} 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-11 bg-muted/5 focus-visible:ring-1 pr-10" 
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-11 w-11 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
+            <Button type="submit" className="w-full h-11" disabled={loading}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
+          <Button variant="outline" className="w-full h-11" type="button" disabled>
+            <Github className="mr-2 h-4 w-4" /> GitHub
+          </Button>
+
+          <div className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-primary font-semibold hover:underline">
+            <Link href="/signup" className="underline underline-offset-4 hover:text-primary font-medium">
               Sign up
             </Link>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* RIGHT SIDE - VALUE PROP */}
+      <div className="hidden bg-zinc-950 lg:flex flex-col justify-center p-12 relative overflow-hidden text-white border-l border-zinc-800">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black opacity-80"></div>
+        
+        <div className="relative z-10 max-w-lg mx-auto">
+            <h2 className="text-3xl font-bold tracking-tight mb-4 min-h-[80px] lg:min-h-[auto]">
+              <Typewriter text=" Stop waiting for the backend." delay={500} />
+            </h2>
+            
+            <p className="text-zinc-400 mb-8 leading-relaxed">
+              APIForge gives frontend teams instant, realistic APIs. Simulate latency, errors, and edge cases without writing server code.
+            </p>
+            
+            <ul className="space-y-4">
+              {[
+                "Instant mock generation from JSON",
+                "Network latency simulation (Slow 3G, etc)",
+                "Collaborative workspaces for teams"
+              ].map((item, i) => (
+                <li key={i} className="flex items-center gap-3 text-sm font-medium text-zinc-300 animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: `${800 + (i * 100)}ms`, animationFillMode: 'backwards' }}>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500/80" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+        </div>
+      </div>
     </div>
   );
 }
