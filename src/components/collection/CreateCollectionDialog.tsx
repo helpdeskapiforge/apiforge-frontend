@@ -33,7 +33,7 @@ export default function CreateCollectionDialog({ open, onOpenChange, workspaceId
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      alert("Failed to create collection");
+      alert("Please switch workspaces or create a new one to continue.");
     } finally {
       setLoading(false);
     }
