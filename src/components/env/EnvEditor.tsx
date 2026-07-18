@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Save, RefreshCw, Trash2, Globe, AlertCircle, Check } from "lucide-react";
 import KeyValueTable from "@/components/request/KeyValueTable"; 
 import { useDashboard } from "@/context/DashboardContext";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function EnvEditor({ envId }: { envId: number }) {
-  const { setActiveEditor, setActiveEntityId, activeWorkspaceId } = useDashboard();
+  const { closeTab, activeWorkspaceId } = useDashboard();
   const [env, setEnv] = useState<any>(null);
   const [vars, setVars] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function EnvEditor({ envId }: { envId: number }) {
       setTimeout(() => setIsSaved(false), 2000);
       
     } catch(e) { 
-        alert("Failed to save environment"); 
+        toast.error(getErrorMessage(e, "Failed to save environment.")); 
     } finally { 
         setSaving(false); 
     }
@@ -75,10 +77,10 @@ export default function EnvEditor({ envId }: { envId: number }) {
     if(!confirm(`Delete environment "${env.name}"?`)) return;
     try {
         await api.delete(`/environments/${envId}`);
-        setActiveEditor("empty");
-        setActiveEntityId(null);
+        toast.success("Environment deleted.");
+        closeTab(`env-editor-${envId}`);
         window.dispatchEvent(new Event("env-change"));
-    } catch(e) { alert("Failed to delete"); }
+    } catch(e) { toast.error(getErrorMessage(e, "Failed to delete environment.")); }
   };
 
   if(loading) return <div className="h-full flex items-center justify-center text-muted-foreground gap-2"><RefreshCw className="h-4 w-4 animate-spin"/> Loading...</div>;

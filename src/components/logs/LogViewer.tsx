@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { FileText, Clock, Copy, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function LogViewer({ logId }: { logId: number }) {
   const [log, setLog] = useState<any>(null);
@@ -14,20 +16,13 @@ export default function LogViewer({ logId }: { logId: number }) {
 
   const loadLog = async () => {
      setLoading(true);
-     const serverId = localStorage.getItem("currentLogServerId");
-     
-     if (!serverId) {
-         setLoading(false);
-         return;
-     }
-
      try {
-         // Workaround: Backend lacks /logs/{id}, so we fetch list by server and find item
-         const res = await api.get(`/logs/server/${serverId}`);
-         const found = res.data.find((l: any) => l.id === logId);
-         setLog(found || null);
+         const res = await api.get(`/logs/${logId}`);
+         setLog(res.data);
      } catch(e) {
          console.error(e);
+         setLog(null);
+         toast.error(getErrorMessage(e, "Failed to load log details."));
      } finally {
          setLoading(false);
      }
@@ -78,16 +73,16 @@ export default function LogViewer({ logId }: { logId: number }) {
         </div>
 
         {/* Request Details (If available in MockLog model) */}
-        {log.body && (
+        {log.responseBody && (
             <div className="space-y-1 flex-1">
                 <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-muted-foreground uppercase">Request Body</label>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigator.clipboard.writeText(log.body)}>
+                    <label className="text-xs font-bold text-muted-foreground uppercase">Response Body</label>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigator.clipboard.writeText(log.responseBody)}>
                         <Copy className="h-3 w-3" />
                     </Button>
                 </div>
                 <pre className="p-4 rounded border bg-muted/50 font-mono text-xs overflow-auto max-h-[300px]">
-                    {log.body}
+                    {log.responseBody}
                 </pre>
             </div>
         )}

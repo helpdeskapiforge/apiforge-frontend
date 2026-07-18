@@ -11,6 +11,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import CreateMockServerDialog from "@/components/mock/CreateMockServerDialog";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 // Helper for cleaner logic in render
 const getMethodColor = (m: string) => {
@@ -72,7 +74,7 @@ export default function MockExplorer() {
         });
         await loadRoutesForServer(serverId);
         openMockRoute(res.data.id);
-    } catch(e) { alert("Failed to create route"); }
+    } catch(e) { toast.error(getErrorMessage(e, "Failed to create route.")); }
   };
 
   const toggleRouteEnabled = async (e: React.MouseEvent, route: any, serverId: number) => {
@@ -92,17 +94,27 @@ export default function MockExplorer() {
   const handleDuplicateRoute = async (e: React.MouseEvent, route: any, serverId: number) => {
     e.stopPropagation();
     const { id, ...rest } = route; 
-    await api.post("/mocks/routes/create", { 
-        ...rest, path: `${rest.path}-copy`, mockServerId: serverId 
-    });
-    loadRoutesForServer(serverId);
+    try {
+        await api.post("/mocks/routes/create", { 
+            ...rest, path: `${rest.path}-copy`, mockServerId: serverId 
+        });
+        toast.success("Route duplicated.");
+        loadRoutesForServer(serverId);
+    } catch (err) {
+        toast.error(getErrorMessage(err, "Failed to duplicate route."));
+    }
   };
 
   const handleDeleteRoute = async (e: React.MouseEvent, routeId: number, serverId: number) => {
     e.stopPropagation();
     if(!confirm("Delete this route?")) return;
-    await api.delete(`/mocks/routes/${routeId}`);
-    loadRoutesForServer(serverId);
+    try {
+        await api.delete(`/mocks/routes/${routeId}`);
+        toast.success("Route deleted.");
+        loadRoutesForServer(serverId);
+    } catch (err) {
+        toast.error(getErrorMessage(err, "Failed to delete route."));
+    }
   };
 
   return (

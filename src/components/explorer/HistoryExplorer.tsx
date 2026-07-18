@@ -10,12 +10,12 @@ interface HistoryEntry {
   id: number;
   method: string;
   url: string;
-  statusCode: number;
+  status: number;
   timestamp: string;
 }
 
 export default function HistoryExplorer() {
-  const { setActiveEditor, setActiveEntityId, activeEntityId } = useDashboard();
+  const { openHistory, activeEntityId } = useDashboard();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,8 +28,8 @@ export default function HistoryExplorer() {
     setLoading(true);
     try {
         // Backend only supports getting the authenticated user's history
-        const res = await api.get("/history/me");
-        setHistory(res.data);
+        const res = await api.get("/history/me", { params: { page: 0, size: 100 } });
+        setHistory(res.data.data);
     } catch(e) {
         console.error("Failed to load history", e);
     } finally {
@@ -38,8 +38,7 @@ export default function HistoryExplorer() {
   };
 
   const openHistoryItem = (id: number) => {
-    setActiveEditor("history-viewer");
-    setActiveEntityId(id);
+    openHistory(id);
   };
 
   const getStatusColor = (code: number) => {
@@ -89,7 +88,7 @@ export default function HistoryExplorer() {
                     item.method === "POST" ? "text-blue-600" : 
                     item.method === "DELETE" ? "text-red-600" : "text-orange-600"
                 }`}>{item.method}</span>
-                <span className={`font-mono ${getStatusColor(item.statusCode)}`}>{item.statusCode}</span>
+                <span className={`font-mono ${getStatusColor(item.status)}`}>{item.status}</span>
              </div>
              <div className="truncate opacity-80 text-[11px]" title={item.url}>{item.url}</div>
              <div className="text-[10px] opacity-40 text-right">

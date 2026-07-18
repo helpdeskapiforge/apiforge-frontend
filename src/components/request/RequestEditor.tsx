@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,15 +10,31 @@ import api from "@/lib/api";
 import KeyValueTable from "@/components/request/KeyValueTable";
 import AuthEditor, { AuthConfig } from "@/components/request/AuthEditor";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
+import { useDashboard } from "@/context/DashboardContext";
+import SaveToCollectionDialog from "@/components/request/SaveToCollectionDialog";
+import CodeSnippetDialog from "@/components/request/CodeSnippetDialog";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface RequestEditorProps {
-  requestId: number;
+  requestId?: number;
+  scratchpadId?: string; // exactly one of requestId/scratchpadId is provided
 }
 
-export default function RequestEditor({ requestId }: RequestEditorProps) {
-  const [request, setRequest] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+const SCRATCHPAD_STORAGE_PREFIX = "apiforge:scratchpad:";
+
+export default function RequestEditor({ requestId, scratchpadId }: RequestEditorProps) {
+  const isScratchpad = !!scratchpadId;
+  const { openRequest, closeTab } = useDashboard();
+  const [request, setRequest] = useState<any>(isScratchpad ? { id: null, name: "Scratchpad" } : null);
+  const [loading, setLoading] = useState(!isScratchpad);
   const [activeTab, setActiveTab] = useState("params");
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [codeDialogOpen, setCodeDialogOpen] = useState(false);
+  const consolePanelRef = useRef<ImperativePanelHandle>(null);
+  const [consoleCollapsed, setConsoleCollapsed] = useState(false);
   
   // Feedback States
   const [saving, setSaving] = useState(false);
@@ -39,8 +56,42 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
   const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
-    if (requestId) fetchRequest();
-  }, [requestId]);
+    if (requestId) {
+      fetchRequest();
+    } else if (scratchpadId) {
+      loadScratchpad();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId, scratchpadId]);
+
+  const loadScratchpad = () => {
+    try {
+      const raw = localStorage.getItem(SCRATCHPAD_STORAGE_PREFIX + scratchpadId);
+      if (raw) {
+        const data = JSON.parse(raw);
+        setMethod(data.method || "GET");
+        setUrl(data.url || "");
+        setBody(data.body || "");
+        setHeaders(data.headers || {});
+        setAuthConfig(data.authConfig || { type: "none" });
+      }
+    } catch (e) {
+      console.error("Failed to restore scratchpad", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Autosave the scratchpad locally on every change -- it's meant to be a "just try
+  // something" space that never loses work, without ever hitting the backend until
+  // the user explicitly chooses to save it into a collection.
+  useEffect(() => {
+    if (!scratchpadId) return;
+    const timeout = setTimeout(() => {
+      localStorage.setItem(SCRATCHPAD_STORAGE_PREFIX + scratchpadId, JSON.stringify({ method, url, body, headers, authConfig }));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [scratchpadId, method, url, body, headers, authConfig]);
 
   const fetchRequest = async () => {
     setLoading(true);
@@ -106,6 +157,7 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
     setExecuting(true);
     setResponse(null);
     setResponseStatus(null);
+    consolePanelRef.current?.expand(); // surface the console automatically if the user had collapsed it
     
     try {
       const storedVars = localStorage.getItem("activeEnvVars");
@@ -140,15 +192,24 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
       setResponseTime(res.data.timeMs);
     } catch (error: any) {
       console.error("Execute Error", error);
-      const errMsg = error.response?.data || "Error: Could not reach server";
+      // The backend blocks requests to localhost/private networks/cloud-metadata
+      // addresses from this proxy (SSRF protection) -- surface that reason clearly
+      // instead of a generic failure, since it's the #1 cause of "why didn't this work"
+      // for anyone testing against a local API.
+      const errMsg = getErrorMessage(error, "Could not reach the target server.");
       setResponse(errMsg);
       setResponseStatus(error.response?.status || 500);
+      toast.error(errMsg);
     } finally {
       setExecuting(false);
     }
   };
 
   const handleSave = async () => {
+    if (isScratchpad) {
+      setSaveDialogOpen(true);
+      return;
+    }
     if (!request) return;
     setSaving(true);
     try {
@@ -164,9 +225,20 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
 
     } catch (error) { 
         console.error("Failed to save", error); 
+        toast.error(getErrorMessage(error, "Failed to save request.")); 
     } finally { 
         setSaving(false); 
     }
+  };
+
+  const handleSavedToCollection = (newRequestId: number) => {
+    setSaveDialogOpen(false);
+    toast.success("Saved to collection.");
+    if (scratchpadId) {
+      localStorage.removeItem(SCRATCHPAD_STORAGE_PREFIX + scratchpadId);
+      closeTab(`scratchpad-${scratchpadId}`);
+    }
+    openRequest(newRequestId);
   };
 
   const handleCopyResponse = () => {
@@ -219,6 +291,9 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
         </div>
 
         <div className="flex items-center gap-3">
+            {isScratchpad && (
+                <Badge variant="secondary" className="h-6 text-[10px] font-semibold tracking-wide uppercase">Scratchpad</Badge>
+            )}
             {/* SEND BUTTON */}
             <Button 
                 onClick={handleSend} 
@@ -229,6 +304,17 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
                 SEND
             </Button>
             
+            {/* CODE SNIPPET BUTTON */}
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCodeDialogOpen(true)}
+                className="h-11 w-11 text-muted-foreground hover:text-foreground"
+                title="Generate code"
+            >
+                <Terminal className="h-5 w-5" />
+            </Button>
+
             {/* SAVE BUTTON WITH FEEDBACK */}
             <Button 
                 variant={isSaved ? "outline" : "ghost"} 
@@ -251,8 +337,10 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
         </div>
       </div>
 
-      {/* 🟠 MAIN CONTENT */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      {/* 🟠 MAIN CONTENT + 🔵 RESPONSE CONSOLE -- a resizable, collapsible split like
+          Postman/Insomnia/DevTools, instead of a fixed 60/40 split that never moves. */}
+      <ResizablePanelGroup direction="vertical" autoSaveId="apiforge:layout:request-editor" className="flex-1 min-h-0">
+      <ResizablePanel defaultSize={60} minSize={20} className="flex flex-col min-h-0">
         <div className="border-b px-2 bg-background/50 backdrop-blur sticky top-0 z-10">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="h-11 bg-transparent p-0 gap-6 w-full justify-start px-2">
@@ -301,14 +389,37 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
                  </TabsContent>
              </Tabs>
         </div>
-      </div>
-      
-      {/* 🔵 RESPONSE SECTION */}
-      <div className="h-[40%] border-t bg-muted/5 flex flex-col relative z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-        <div className="h-10 border-b flex items-center justify-between px-4 bg-background/95 backdrop-blur select-none">
+      </ResizablePanel>
+
+      <ResizableHandle withHandle />
+
+      {/* 🔵 RESPONSE SECTION -- drag the handle above to resize, or use the
+          chevron to collapse/expand the console entirely (like a terminal panel). */}
+      <ResizablePanel
+        ref={consolePanelRef}
+        defaultSize={40}
+        minSize={10}
+        collapsible
+        collapsedSize={0}
+        onCollapse={() => setConsoleCollapsed(true)}
+        onExpand={() => setConsoleCollapsed(false)}
+        className="border-t bg-muted/5 flex flex-col relative z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] min-h-0"
+      >
+        <div className="h-10 border-b flex items-center justify-between px-4 bg-background/95 backdrop-blur select-none shrink-0">
             <div className="flex items-center gap-2">
                  <Terminal className="h-3.5 w-3.5 text-muted-foreground/70" />
                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Console</span>
+                 <Button
+                    variant="ghost" size="icon" className="h-5 w-5 ml-1"
+                    onClick={() => {
+                      const panel = consolePanelRef.current;
+                      if (!panel) return;
+                      if (consoleCollapsed) panel.expand(); else panel.collapse();
+                    }}
+                    title={consoleCollapsed ? "Expand console" : "Collapse console"}
+                 >
+                    {consoleCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                 </Button>
             </div>
             
             {responseStatus ? (
@@ -361,7 +472,23 @@ export default function RequestEditor({ requestId }: RequestEditorProps) {
                 </div>
             )}
         </div>
-      </div>
+      </ResizablePanel>
+      </ResizablePanelGroup>
+
+      <CodeSnippetDialog
+        open={codeDialogOpen}
+        onOpenChange={setCodeDialogOpen}
+        request={{ method, url, headers, body }}
+      />
+
+      {isScratchpad && (
+        <SaveToCollectionDialog
+          open={saveDialogOpen}
+          onOpenChange={setSaveDialogOpen}
+          requestData={{ method, url, body, headers, authConfig }}
+          onSaved={handleSavedToCollection}
+        />
+      )}
     </div>
   );
 }

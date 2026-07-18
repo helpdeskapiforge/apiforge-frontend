@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/tooltip";
 import KeyValueTable from "@/components/request/KeyValueTable";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Props {
   routeId: number;
@@ -81,15 +83,23 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Match the backend's hard limits (30s max delay, 0-1 failure rate) so the UI
+      // never shows a value the server silently clamped after the fact.
+      const clampedDelay = Math.max(0, Math.min(delay, 30_000));
+      const clampedFailureRate = Math.max(0, Math.min(failureRate, 1));
+
       await api.put(`/mocks/routes/${routeId}`, {
         ...route,
         responseBody: body,
         responseHeaders: JSON.stringify(headers),
-        delayMs: delay,
+        delayMs: clampedDelay,
         chaosEnabled,
-        failureRate,
+        failureRate: clampedFailureRate,
         mockServerId: route.mockServer?.id || route.mockServerId
       });
+
+      setDelay(clampedDelay);
+      setFailureRate(clampedFailureRate);
       onUpdate();
       
       // ✅ Success Feedback
@@ -97,7 +107,7 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
       setTimeout(() => setIsSaved(false), 2000);
 
     } catch (e) { 
-        alert("Failed to save route"); 
+        toast.error(getErrorMessage(e, "Failed to save route.")); 
     } finally { 
         setSaving(false); 
     }
@@ -109,7 +119,7 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
         setBody(JSON.stringify(parsed, null, 2));
         setFormatted(true);
         setTimeout(() => setFormatted(false), 2000);
-    } catch (e) { alert("Invalid JSON"); }
+    } catch (e) { toast.error("That's not valid JSON — check for a missing comma or bracket."); }
   };
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -325,9 +335,11 @@ export default function MockRouteEditor({ routeId, onUpdate }: Props) {
                                 </div>
                                 <Input 
                                     type="number" 
+                                    min={0}
+                                    max={30000}
                                     className="w-20 text-right font-mono"
                                     value={delay} 
-                                    onChange={(e) => setDelay(parseInt(e.target.value) || 0)} 
+                                    onChange={(e) => setDelay(Math.min(parseInt(e.target.value) || 0, 30000))} 
                                 />
                             </div>
                             

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Globe, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Props {
   open: boolean;
@@ -29,11 +31,12 @@ export default function CreateEnvironmentDialog({ open, onOpenChange, workspaceI
           variables: "{}" // Initialize with empty JSON string
       });
       setName("");
+      toast.success("Environment created.");
       onSuccess();
       onOpenChange(false);
     } catch (e) {
       console.error(e);
-      alert("Failed to create environment");
+      toast.error(getErrorMessage(e, "Failed to create environment."));
     } finally {
       setLoading(false);
     }

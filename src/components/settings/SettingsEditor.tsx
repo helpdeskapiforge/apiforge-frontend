@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes"; // 1. Import next-themes hook
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function SettingsEditor({ category }: { category: string }) {
   const { activeWorkspaceId } = useDashboard();
@@ -121,8 +123,9 @@ export default function SettingsEditor({ category }: { category: string }) {
         
         setSuccessMsg("Settings saved successfully.");
         setTimeout(() => setSuccessMsg(""), 3000);
+        toast.success("Settings saved.");
     } catch (e) {
-        alert("Failed to save settings.");
+        toast.error(getErrorMessage(e, "Failed to save settings."));
     } finally {
         setLoading(false);
     }
@@ -143,9 +146,9 @@ export default function SettingsEditor({ category }: { category: string }) {
     if (!confirm("Are you sure? This action cannot be undone.")) return;
     try {
         await api.delete(`/workspaces/${activeWorkspaceId}`);
-        alert("Workspace deleted.");
+        toast.success("Workspace deleted.");
         window.location.reload(); 
-    } catch (e) { alert("Failed to delete workspace"); }
+    } catch (e) { toast.error(getErrorMessage(e, "Failed to delete workspace.")); }
   };
 
   return (
@@ -341,7 +344,7 @@ export default function SettingsEditor({ category }: { category: string }) {
                                     </div>
                                     <p className="text-sm text-muted-foreground">Use this token to authenticate external tools.</p>
                                 </div>
-                                <Button variant="secondary" onClick={() => alert("Token generation coming in v2.0")}>Generate New Token</Button>
+                                <Button variant="secondary" onClick={() => toast.info("Token generation is coming in v2.0.")}>Generate New Token</Button>
                              </div>
                         </div>
                     </section>

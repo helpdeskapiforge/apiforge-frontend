@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Command, Github, CheckCircle2, Loader2, Eye, EyeOff, ServerCrash, Coffee } from "lucide-react";
 import { setCookie } from "cookies-next"; 
-import { toast } from "sonner"; // Assuming you have sonner installed, otherwise use alert
+import { toast } from "sonner";
 
 // --- MICRO-COMPONENT: Typewriter ---
 const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => {
@@ -45,8 +45,9 @@ const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => 
   );
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false); 
@@ -54,6 +55,12 @@ export default function LoginPage() {
   
   // 🆕 State to track if the server is likely sleeping
   const [serverWakingUp, setServerWakingUp] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("sessionExpired")) {
+      toast.info("Your session has expired. Please sign in again.");
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,14 +84,16 @@ export default function LoginPage() {
         localStorage.setItem("user", JSON.stringify(data));
         
         router.push("/dashboard");
+      } else if (res.status === 429) {
+        // Rate-limited by the backend's LoginRateLimiter
+        const body = await res.json().catch(() => null);
+        toast.error(body?.message || "Too many login attempts. Please wait a minute and try again.");
+      } else if (res.status === 401 || res.status === 400) {
+        const body = await res.json().catch(() => null);
+        toast.error(body?.message || "Invalid credentials. Please try again.");
       } else {
-        // Handle explicit errors (401, 400)
-        if (res.status === 401 || res.status === 400) {
-            alert("Invalid credentials. Please try again.");
-        } else {
-            // 500 errors might also mean server issues
-            setServerWakingUp(true);
-        }
+        // 500 errors might also mean server issues
+        setServerWakingUp(true);
       }
     } catch (error) {
       console.error("Login connection error", error);
@@ -238,5 +247,12 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

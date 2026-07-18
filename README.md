@@ -13,6 +13,8 @@ Stop waiting for the backend. Forge your own APIs instantly.
 * **🐢 Latency Simulation:** Artificially inject network delays (e.g., 2000ms) to test loading states and skeletons.
 * **💥 Chaos Engineering:** Randomly fail requests (e.g., 10% chance of 500 Error) to test error boundaries and resilience.
 * **📮 Request Hub:** A full-featured HTTP client (like Postman) to test your mocks and real APIs.
+* **↔️ Resizable, Persisted Layout:** Drag to resize the sidebar and the request/response split — like a real IDE, not a fixed 60/40 layout. Your layout is remembered between sessions, and the response console can be collapsed/expanded with one click.
+* **🗂️ Multi-Tab Workspace:** Open several requests, mocks, and environments at once in a browser-style tab strip — closable, pinnable, and restored on refresh.
 * **🌍 Environment Variables:** Switch between Local, Dev, and Prod contexts using dynamic variables like `{{baseUrl}}`.
 * **📊 Real-time Analytics:** Track request history, status codes, and response times in a unified dashboard.
 * **🛡️ Secure Authentication:** JWT-based auth with Next.js Middleware protection and cold-start handling.
@@ -23,7 +25,7 @@ Stop waiting for the backend. Forge your own APIs instantly.
 
 This project is built with a modern, performance-focused stack:
 
-* **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
+* **Framework:** [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
 * **Styling:** [Tailwind CSS](https://tailwindcss.com/)
 * **UI Components:** [Shadcn/UI](https://ui.shadcn.com/) & [Radix UI](https://www.radix-ui.com/)
 * **Icons:** [Lucide React](https://lucide.dev/)

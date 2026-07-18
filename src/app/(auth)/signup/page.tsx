@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Command, Github, Terminal, Zap, Layers, Loader2, Eye, EyeOff, Coffee } from "lucide-react";
+import { toast } from "sonner";
 
 // --- MICRO-COMPONENT: Typewriter ---
 const Typewriter = ({ text, delay = 500 }: { text: string; delay?: number }) => {
@@ -67,14 +68,21 @@ export default function SignupPage() {
 
       if (res.ok) {
         // Success: Redirect to login
+        toast.success("Account created! Please sign in.");
         router.push("/login");
       } else {
         // Handle specific API errors vs Server Errors
         if (res.status >= 500) {
              setServerWakingUp(true);
         } else {
-             const err = await res.text();
-             alert("Signup failed: " + err);
+             const body = await res.json().catch(() => null);
+             const fieldErrors = body?.fieldErrors as Record<string, string> | undefined;
+             if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+                 const [field, msg] = Object.entries(fieldErrors)[0];
+                 toast.error(`${field}: ${msg}`);
+             } else {
+                 toast.error(body?.message || "Signup failed. Please check your details and try again.");
+             }
         }
       }
     } catch (error) {
