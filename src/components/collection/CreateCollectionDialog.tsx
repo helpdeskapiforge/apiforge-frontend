@@ -6,15 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderGit2, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface CreateCollectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: number;
+  parentId?: number | null;
   onSuccess: () => void;
 }
 
-export default function CreateCollectionDialog({ open, onOpenChange, workspaceId, onSuccess }: CreateCollectionDialogProps) {
+export default function CreateCollectionDialog({ open, onOpenChange, workspaceId, parentId, onSuccess }: CreateCollectionDialogProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,14 +29,16 @@ export default function CreateCollectionDialog({ open, onOpenChange, workspaceId
     try {
       await api.post("/collections/create", {
         name,
-        workspaceId
+        workspaceId,
+        ...(parentId ? { parentId } : {}),
       });
       setName("");
+      toast.success(parentId ? "Folder created." : "Collection created.");
       onSuccess();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      alert("Please switch workspaces or create a new one to continue.");
+      toast.error(getErrorMessage(error, "Failed to create collection. Try switching workspaces or creating a new one."));
     } finally {
       setLoading(false);
     }
@@ -45,12 +50,12 @@ export default function CreateCollectionDialog({ open, onOpenChange, workspaceId
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderGit2 className="h-5 w-5 text-muted-foreground" />
-            Create New Collection
+            {parentId ? "Create New Folder" : "Create New Collection"}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label>Collection Name</Label>
+            <Label>{parentId ? "Folder Name" : "Collection Name"}</Label>
             <Input 
                 placeholder="e.g. Auth Service" 
                 value={name} 

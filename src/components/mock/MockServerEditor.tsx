@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Save, Server, ExternalLink, Copy, Trash2, Loader2, RefreshCw, Check } from "lucide-react";
 import { useDashboard } from "@/context/DashboardContext";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function MockServerEditor({ serverId }: { serverId: number }) {
-  const { setActiveEditor, setActiveEntityId } = useDashboard();
+  const { closeTab } = useDashboard();
   const [server, setServer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +41,7 @@ export default function MockServerEditor({ serverId }: { serverId: number }) {
       setTimeout(() => setIsSaved(false), 2000);
 
     } catch(e) { 
-        alert("Failed to save"); 
+        toast.error(getErrorMessage(e, "Failed to save server.")); 
     } finally { 
         setSaving(false); 
     }
@@ -49,10 +51,10 @@ export default function MockServerEditor({ serverId }: { serverId: number }) {
     if(!confirm("Are you sure you want to delete this server and all its routes?")) return;
     try {
         await api.delete(`/mocks/servers/${serverId}`);
-        setActiveEditor("empty");
-        setActiveEntityId(null);
+        toast.success("Mock server deleted.");
+        closeTab(`server-config-${serverId}`);
         window.location.reload(); 
-    } catch(e) { alert("Failed to delete"); }
+    } catch(e) { toast.error(getErrorMessage(e, "Failed to delete server.")); }
   };
 
   const handleCopyUrl = () => {

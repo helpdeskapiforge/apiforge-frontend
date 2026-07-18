@@ -3,7 +3,7 @@ import { useDashboard } from "@/context/DashboardContext";
 import { User, Briefcase, Sliders, Shield } from "lucide-react";
 
 export default function SettingsExplorer() {
-  const { setActiveEditor, setActiveEntityId, activeEntityId } = useDashboard();
+  const { openSettings, activeEntityId } = useDashboard();
 
   const menuItems = [
     { id: "general", label: "General", icon: Sliders },
@@ -13,8 +13,7 @@ export default function SettingsExplorer() {
   ];
 
   const handleSelect = (id: string) => {
-    setActiveEditor("settings-editor");
-    setActiveEntityId(id);
+    openSettings(id, menuItems.find((m) => m.id === id)?.label ?? "Settings");
   };
 
   return (

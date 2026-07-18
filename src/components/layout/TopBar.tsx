@@ -53,7 +53,7 @@ const Highlight = ({ text, highlight }: { text: string, highlight: string }) => 
 export default function TopBar() {
   const router = useRouter();
   const { setTheme, theme } = useTheme();
-  const { setActiveModule, setActiveEditor, setActiveEntityId } = useDashboard(); 
+  const { setActiveModule, openRequest, openMockServer, openSettings } = useDashboard(); 
   
   // --- SEARCH STATE ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -126,8 +126,8 @@ export default function TopBar() {
         // Fetch Requests for each collection (Parallel)
         await Promise.all(collections.map(async (col: any) => {
             try {
-                const reqRes = await api.get(`/requests/collection/${col.id}`);
-                const requests = reqRes.data || [];
+                const reqRes = await api.get(`/requests/collection/${col.id}`, { params: { page: 0, size: 200 } });
+                const requests = reqRes.data?.data || [];
                 requests.forEach((r: any) => index.push({
                     id: r.id, 
                     type: 'request', 
@@ -170,13 +170,9 @@ export default function TopBar() {
 
   const handleResultClick = (item: SearchItem) => {
       if (item.type === 'request') {
-          setActiveModule("requests");
-          setActiveEditor("request-editor");
-          setActiveEntityId(item.id);
+          openRequest(Number(item.id), item.name);
       } else if (item.type === 'mock') {
-          setActiveModule("mocks");
-          setActiveEditor("server-config");
-          setActiveEntityId(item.id);
+          openMockServer(Number(item.id), item.name);
       } else if (item.type === 'env') {
           handleEnvChange(item.id.toString());
       } else if (item.type === 'workspace') {
@@ -270,15 +266,11 @@ export default function TopBar() {
 };
 
   const handleGoToProfile = () => {
-      setActiveModule("settings");
-      setActiveEditor("settings-editor");
-      setActiveEntityId("account");
+      openSettings("account", "Account");
   };
 
   const handleGoToSettings = () => {
-      setActiveModule("settings");
-      setActiveEditor("settings-editor");
-      setActiveEntityId("general");
+      openSettings("general", "Settings");
   };
 
   return (

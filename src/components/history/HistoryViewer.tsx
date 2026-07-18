@@ -4,6 +4,8 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Clock, Loader2, AlertCircle } from "lucide-react";
 import { useDashboard } from "@/context/DashboardContext";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function HistoryViewer({ historyId }: { historyId: number }) {
   const { openRequest, activeWorkspaceId } = useDashboard();
@@ -18,12 +20,12 @@ export default function HistoryViewer({ historyId }: { historyId: number }) {
   const loadDetails = async () => {
     setLoading(true);
     try {
-        // Backend workaround: Fetch list and find item client-side
-        const res = await api.get("/history/me");
-        const found = res.data.find((h: any) => h.id === historyId);
-        setEntry(found || null);
+        const res = await api.get(`/history/${historyId}`);
+        setEntry(res.data);
     } catch (e) {
         console.error("Error loading history item", e);
+        setEntry(null);
+        toast.error(getErrorMessage(e, "Failed to load history entry."));
     } finally {
         setLoading(false);
     }
@@ -37,7 +39,7 @@ export default function HistoryViewer({ historyId }: { historyId: number }) {
         // 1. Find a collection to place this request in (Default to first one)
         const colRes = await api.get(`/collections/workspace/${activeWorkspaceId}`);
         if (!colRes.data || colRes.data.length === 0) {
-            alert("No collections found in this workspace. Please create a collection first to restore requests.");
+            toast.error("No collections found in this workspace. Please create a collection first to restore requests.");
             return;
         }
         const targetCollectionId = colRes.data[0].id;
@@ -60,12 +62,13 @@ export default function HistoryViewer({ historyId }: { historyId: number }) {
 
         // 3. Switch to the new request
         if (res.data && res.data.id) {
+            toast.success("Request restored to editor.");
             openRequest(res.data.id);
         }
 
     } catch (e) {
         console.error("Failed to restore request", e);
-        alert("Failed to restore request. Check console for details.");
+        toast.error(getErrorMessage(e, "Failed to restore request."));
     } finally {
         setRestoring(false);
     }
@@ -102,8 +105,7 @@ export default function HistoryViewer({ historyId }: { historyId: number }) {
             <div>
                 <label className="text-xs text-muted-foreground uppercase font-bold">Status</label>
                 <div className={`font-mono font-bold ${entry.status >= 400 ? "text-red-500" : "text-green-600"}`}>
-                    {/* Note: Your previous code used 'statusCode' or 'status'. Verify your API response key. Usually 'status' in history model based on your controller. */}
-                    {entry.status || entry.statusCode}
+                    {entry.status}
                 </div>
             </div>
             <div>

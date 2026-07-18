@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import api from "@/lib/api";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface CreateRequestDialogProps {
   open: boolean;
@@ -29,7 +31,7 @@ export default function CreateRequestDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!collectionId) {
-        alert("Please select a collection first!");
+        toast.error("Please select a collection first!");
         return;
     }
     
@@ -47,6 +49,7 @@ export default function CreateRequestDialog({
       onSuccess(); // Trigger refresh in parent
     } catch (error) {
       console.error("Failed to create request", error);
+      toast.error(getErrorMessage(error, "Failed to create request."));
     } finally {
       setLoading(false);
     }

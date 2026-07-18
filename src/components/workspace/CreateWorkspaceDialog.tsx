@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Briefcase, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Props {
   open: boolean;
@@ -25,10 +27,11 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onSuccess }:
     try {
       await api.post("/workspaces/create", { name });
       setName("");
+      toast.success("Workspace created.");
       onSuccess();
       onOpenChange(false);
     } catch (error) {
-      alert("Failed to create workspace");
+      toast.error(getErrorMessage(error, "Failed to create workspace."));
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Server, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Props {
   open: boolean;
@@ -31,10 +33,11 @@ export default function CreateMockServerDialog({ open, onOpenChange, workspaceId
       });
       setName("");
       setPathPrefix("");
+      toast.success("Mock server created.");
       onSuccess();
       onOpenChange(false);
     } catch (e) {
-      alert("Failed to create server");
+      toast.error(getErrorMessage(e, "Failed to create mock server."));
       console.error(e);
     } finally {
       setLoading(false);

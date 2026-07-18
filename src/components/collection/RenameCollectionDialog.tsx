@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Props {
   open: boolean;
@@ -29,10 +31,11 @@ export default function RenameCollectionDialog({ open, onOpenChange, collection,
     setLoading(true);
     try {
       await api.put(`/collections/${collection.id}`, { name });
+      toast.success("Collection renamed.");
       onSuccess();
       onOpenChange(false);
     } catch (error) {
-      alert("Failed to rename collection");
+      toast.error(getErrorMessage(error, "Failed to rename collection."));
     } finally {
       setLoading(false);
     }

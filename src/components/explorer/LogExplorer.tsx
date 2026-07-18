@@ -19,14 +19,18 @@ interface MockLog {
 }
 
 export default function LogExplorer() {
-  const { setActiveEditor, setActiveEntityId, activeEntityId, activeWorkspaceId } = useDashboard();
+  const { openLog, activeEntityId, activeWorkspaceId } = useDashboard();
   
   // State
   const [servers, setServers] = useState<any[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string>("");
   const [logs, setLogs] = useState<MockLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const PAGE_SIZE = 50;
 
   // 1. Load Servers on Mount
   useEffect(() => {
@@ -58,8 +62,10 @@ export default function LogExplorer() {
   const loadLogs = async (serverId: string) => {
     setLoading(true);
     try {
-      const res = await api.get(`/logs/server/${serverId}`);
-      setLogs(res.data);
+      const res = await api.get(`/logs/server/${serverId}`, { params: { page: 0, size: PAGE_SIZE } });
+      setLogs(res.data.data);
+      setPage(0);
+      setHasNext(res.data.hasNext);
     } catch (e) {
       console.error("Failed to load logs", e);
     } finally {
@@ -67,9 +73,20 @@ export default function LogExplorer() {
     }
   };
 
-  const openLog = (id: number) => {
-    setActiveEditor("log-viewer");
-    setActiveEntityId(id);
+  const loadMoreLogs = async () => {
+    if (!selectedServerId || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await api.get(`/logs/server/${selectedServerId}`, { params: { page: nextPage, size: PAGE_SIZE } });
+      setLogs(prev => [...prev, ...res.data.data]);
+      setPage(nextPage);
+      setHasNext(res.data.hasNext);
+    } catch (e) {
+      console.error("Failed to load more logs", e);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const getStatusColor = (code: number) => {
@@ -167,6 +184,18 @@ export default function LogExplorer() {
         
         {selectedServerId && filteredLogs.length === 0 && !loading && (
              <div className="p-4 text-center text-xs text-muted-foreground italic">No logs found.</div>
+        )}
+
+        {selectedServerId && !searchTerm && hasNext && (
+            <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground mt-1"
+                onClick={loadMoreLogs}
+                disabled={loadingMore}
+            >
+                {loadingMore ? "Loading…" : "Load more logs"}
+            </Button>
         )}
       </div>
     </div>

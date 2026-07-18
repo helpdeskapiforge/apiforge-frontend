@@ -35,9 +35,12 @@ import EnvEditor from "@/components/env/EnvEditor";
 import LogViewer from "@/components/logs/LogViewer";
 import HistoryViewer from "@/components/history/HistoryViewer";
 import SettingsEditor from "@/components/settings/SettingsEditor";
+import TabStrip from "@/components/layout/TabStrip";
+import CommandPalette from "@/components/command-palette/CommandPalette";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 export default function DashboardShell() {
-  const { activeModule, setActiveModule, activeEditor, activeEntityId } =
+  const { activeModule, setActiveModule, activeEditor, activeEntityId, tabs, openScratchpad } =
     useDashboard();
 
   return (
@@ -99,59 +102,70 @@ export default function DashboardShell() {
         </div>
       </aside>
 
-      {/* ================= MIDDLE EXPLORER ================= */}
-      <aside className="w-[280px] border-r bg-muted/5 flex flex-col shrink-0">
-        {activeModule === "requests" && <RequestExplorer />}
-        {activeModule === "mocks" && <MockExplorer />}
-        {activeModule === "environments" && <EnvironmentExplorer />}
-        {activeModule === "logs" && <LogExplorer />}
-        {activeModule === "history" && <HistoryExplorer />}
-        {activeModule === "settings" && <SettingsExplorer />}
-      </aside>
+      {/* ================= MIDDLE EXPLORER + RIGHT EDITOR (resizable, like every real IDE/API client) ================= */}
+      <ResizablePanelGroup direction="horizontal" autoSaveId="apiforge:layout:main" className="flex-1 min-w-0">
+        <ResizablePanel defaultSize={22} minSize={14} maxSize={40} className="border-r bg-muted/5 flex flex-col min-w-0">
+          {activeModule === "requests" && <RequestExplorer />}
+          {activeModule === "mocks" && <MockExplorer />}
+          {activeModule === "environments" && <EnvironmentExplorer />}
+          {activeModule === "logs" && <LogExplorer />}
+          {activeModule === "history" && <HistoryExplorer />}
+          {activeModule === "settings" && <SettingsExplorer />}
+        </ResizablePanel>
 
-      {/* ================= RIGHT EDITOR ================= */}
-      <main className="flex-1 flex flex-col min-w-0 bg-background overflow-y-auto">
-        {activeEditor === "request-editor" && activeEntityId && (
-          <RequestEditor requestId={activeEntityId as number} />
-        )}
+        <ResizableHandle withHandle />
 
-        {activeEditor === "mock-route-editor" && activeEntityId && (
-          <MockRouteEditor
-            routeId={activeEntityId as number}
-            onUpdate={() => {}}
-          />
-        )}
+        <ResizablePanel defaultSize={78} minSize={40} className="flex flex-col min-w-0 bg-background">
+          <TabStrip />
+          <div className="flex-1 overflow-y-auto min-h-0">
+          {activeEditor === "request-editor" && activeEntityId && (
+            <RequestEditor requestId={activeEntityId as number} />
+          )}
 
-        {activeEditor === "server-config" && activeEntityId && (
-          <MockServerEditor serverId={activeEntityId as number} />
-        )}
+          {activeEditor === "scratchpad" && activeEntityId && (
+            <RequestEditor scratchpadId={activeEntityId as string} />
+          )}
 
-        {activeEditor === "env-editor" && activeEntityId && (
-          <EnvEditor envId={activeEntityId as number} />
-        )}
+          {activeEditor === "mock-route-editor" && activeEntityId && (
+            <MockRouteEditor
+              routeId={activeEntityId as number}
+              onUpdate={() => {}}
+            />
+          )}
 
-        {activeEditor === "log-viewer" && activeEntityId && (
-          <LogViewer logId={activeEntityId as number} />
-        )}
+          {activeEditor === "server-config" && activeEntityId && (
+            <MockServerEditor serverId={activeEntityId as number} />
+          )}
 
-        {activeEditor === "history-viewer" && activeEntityId && (
-          <HistoryViewer historyId={activeEntityId as number} />
-        )}
+          {activeEditor === "env-editor" && activeEntityId && (
+            <EnvEditor envId={activeEntityId as number} />
+          )}
 
-        {activeEditor === "settings-editor" && activeEntityId && (
-          <SettingsEditor category={activeEntityId as string} />
-        )}
+          {activeEditor === "log-viewer" && activeEntityId && (
+            <LogViewer logId={activeEntityId as number} />
+          )}
 
-        {/* 🏠 DASHBOARD HOME */}
-        {activeEditor === "empty" && <DashboardHome />}
-      </main>
+          {activeEditor === "history-viewer" && activeEntityId && (
+            <HistoryViewer historyId={activeEntityId as number} />
+          )}
+
+          {activeEditor === "settings-editor" && activeEntityId && (
+            <SettingsEditor category={activeEntityId as string} />
+          )}
+
+          {/* 🏠 DASHBOARD HOME -- shown when there are no open tabs at all */}
+          {(activeEditor === "empty" || tabs.length === 0) && <DashboardHome onNewScratchpad={openScratchpad} />}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+      <CommandPalette />
     </div>
   );
 }
 
 /* ================= 🏠 DASHBOARD HOME COMPONENT ================= */
 
-function DashboardHome() {
+function DashboardHome({ onNewScratchpad }: { onNewScratchpad: () => void }) {
   const { setActiveModule, activeWorkspaceId } = useDashboard();
   const [stats, setStats] = useState({ collections: 0, mocks: 0, historyCount: 0 });
   const [recentHistory, setRecentHistory] = useState<any[]>([]);
@@ -189,15 +203,15 @@ function DashboardHome() {
             const [colRes, mockRes, histRes] = await Promise.all([
                 api.get(`/collections/workspace/${currentWs.id}`),
                 api.get(`/mocks/servers/workspace/${currentWs.id}`),
-                api.get("/history/me")
+                api.get("/history/me", { params: { page: 0, size: 5 } })
             ]);
 
             setStats({
                 collections: colRes.data.length,
                 mocks: mockRes.data.length,
-                historyCount: histRes.data.length
+                historyCount: histRes.data.totalElements
             });
-            setRecentHistory(histRes.data.slice(0, 5));
+            setRecentHistory(histRes.data.data);
         }
     } catch (e) {
         console.error("Dashboard Load Failed", e);
@@ -225,7 +239,7 @@ function DashboardHome() {
                 Here is what&apos;s happening in <span className="font-semibold text-foreground">{workspaceName}</span> today.
             </p>
         </div>
-        <Button onClick={() => setActiveModule("requests")} className="gap-2 shadow-sm">
+        <Button onClick={onNewScratchpad} className="gap-2 shadow-sm">
             <Plus className="h-4 w-4" /> New Request
         </Button>
       </div>
@@ -303,6 +317,13 @@ function DashboardHome() {
                 <LayoutGrid className="h-4 w-4 text-muted-foreground" /> Quick Actions
             </h3>
             <div className="grid gap-3">
+                <ActionCard
+                    icon={<Zap className="h-5 w-5 text-purple-600" />}
+                    bg="bg-purple-100 dark:bg-purple-900/30"
+                    title="New Scratchpad"
+                    desc="Try a request without saving it anywhere"
+                    onClick={onNewScratchpad}
+                />
                 <ActionCard 
                     icon={<Zap className="h-5 w-5 text-orange-600" />}
                     bg="bg-orange-100 dark:bg-orange-900/30"
