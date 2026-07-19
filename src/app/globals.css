@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -122,4 +123,63 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ============ AI Assistant widget ============ */
+
+@keyframes assistant-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.assistant-pulse::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  animation: assistant-pulse-ring 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes assistant-caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.assistant-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: assistant-caret-blink 0.9s steps(1) infinite;
+}
+
+.assistant-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.assistant-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.assistant-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+.assistant-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }

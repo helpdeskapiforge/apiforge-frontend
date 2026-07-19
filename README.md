@@ -18,6 +18,7 @@ Stop waiting for the backend. Forge your own APIs instantly.
 * **🌍 Environment Variables:** Switch between Local, Dev, and Prod contexts using dynamic variables like `{{baseUrl}}`.
 * **📊 Real-time Analytics:** Track request history, status codes, and response times in a unified dashboard.
 * **🛡️ Secure Authentication:** JWT-based auth with Next.js Middleware protection and cold-start handling.
+* **🤖 AI Tools:** cURL Generator, Postman Test Generator, Mock Data Generator, and JSON Validator, backed by a pluggable AI provider (local Ollama/LM Studio, or free-tier OpenRouter/Gemini) on the backend.
 
 ---
 
@@ -51,43 +52,34 @@ This project is built with a modern, performance-focused stack:
 
 ## 🏗️ Getting Started
 
-Follow these steps to run the frontend locally.
-
 ### Prerequisites
 
+* The **APIForge Backend** running (see that repo's README) — by default expected at
+  `http://localhost:8080`, which its own `docker compose up` already publishes.
+
+### Option A — Docker
+
+```bash
+cp .env.example .env.local   # defaults already point at http://localhost:8080
+docker compose up --build
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### Option B — Node directly
+
 * Node.js 18+ installed
-* The **APIForge Backend** running locally on port `8080` (or update the API URL in the code).
 
-### Installation
-
-1. **Clone the repository:**
 ```bash
-git clone https://github.com/your-username/apiforge-frontend.git
-cd apiforge-frontend
-
-```
-
-
-2. **Install dependencies:**
-```bash
+cp .env.example .env.local
 npm install
-# or
-yarn install
-# or
-pnpm install
-
-```
-
-
-3. **Run the development server:**
-```bash
 npm run dev
-
 ```
 
+Open [http://localhost:3000](http://localhost:3000).
 
-4. **Open in Browser:**
-Navigate to [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000).
+`NEXT_PUBLIC_API_BASE_URL` in `.env.example`/`.env.local` controls which backend the
+app talks to — see that file's comments if the backend isn't on the default port/host.
 
 ---
 

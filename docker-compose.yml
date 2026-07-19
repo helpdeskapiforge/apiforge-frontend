@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        # Baked into the client bundle at BUILD time (Next.js requirement for NEXT_PUBLIC_*).
+        # This is called from the user's BROWSER, not container-to-container -- so it must be
+        # a host-reachable URL. Default matches the backend repo's docker-compose.yml, which
+        # publishes the API on localhost:8080. Override for a non-local deployment:
+        #   NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com docker compose up --build
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
