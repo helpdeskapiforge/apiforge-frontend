@@ -14,10 +14,14 @@ import {
   Zap,
   Plus,
   ArrowRight,
-  LayoutGrid
+  LayoutGrid,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+/* ------------------ AI Tools (full-width module, no explorer/editor split) ------------------ */
+import AIToolsPanel from "@/components/ai/AIToolsPanel";
 
 /* ------------------ Middle Pane (Explorers) ------------------ */
 import RequestExplorer from "@/components/explorer/RequestExplorer";
@@ -92,6 +96,15 @@ export default function DashboardShell() {
           onClick={() => setActiveModule("history")}
         />
 
+        <div className="my-2 mx-3 border-t border-border/40" />
+
+        <NavButton
+          icon={<Sparkles size={18} />}
+          label="AI Tools"
+          active={activeModule === "ai"}
+          onClick={() => setActiveModule("ai")}
+        />
+
         <div className="mt-auto">
           <NavButton
             icon={<Settings size={18} />}
@@ -103,6 +116,11 @@ export default function DashboardShell() {
       </aside>
 
       {/* ================= MIDDLE EXPLORER + RIGHT EDITOR (resizable, like every real IDE/API client) ================= */}
+      {activeModule === "ai" ? (
+        <div className="flex-1 min-w-0 bg-background">
+          <AIToolsPanel />
+        </div>
+      ) : (
       <ResizablePanelGroup direction="horizontal" autoSaveId="apiforge:layout:main" className="flex-1 min-w-0">
         <ResizablePanel defaultSize={22} minSize={14} maxSize={40} className="border-r bg-muted/5 flex flex-col min-w-0">
           {activeModule === "requests" && <RequestExplorer />}
@@ -158,6 +176,7 @@ export default function DashboardShell() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      )}
       <CommandPalette />
     </div>
   );

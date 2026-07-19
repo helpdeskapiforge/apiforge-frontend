@@ -9,6 +9,7 @@ export type ModuleType =
   | "environments"
   | "logs"
   | "history"
+  | "ai"
   | "settings";
 
 // 2. Editor Types (what a tab renders in the main pane)
